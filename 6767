@@ -1,0 +1,242 @@
+-- โหลด Rayfield Library
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+
+-- Services
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local LocalPlayer = Players.LocalPlayer
+
+-- Variables สำหรับระบบต่างๆ
+local NoclipEnabled = false
+local FlyEnabled = false
+local FlySpeed = 50
+local ESPEnabled = false
+local SelectedPlayer = nil
+
+-- สร้าง Window หลัก
+local Window = Rayfield:CreateWindow({
+   Name = "Lucky Block Hub - Multi Hack",
+   LoadingTitle = "กำลังโหลดระบบ...",
+   LoadingSubtitle = "by Your Helper",
+   ConfigurationSaving = { Enabled = false },
+   Discord = { Enabled = false },
+   KeySystem = false
+})
+
+----------------------------------------------------------------
+-- TAB 1: MAIN (Spawn Lucky Block)
+----------------------------------------------------------------
+local MainTab = Window:CreateTab("Main", 4483362458)
+
+MainTab:CreateButton({
+   Name = "Spawn Lucky Block",
+   Callback = function()
+       local event = ReplicatedStorage:FindFirstChild("SpawnLuckyBlock")
+       if event then
+           event:FireServer()
+           Rayfield:Notify({ Title = "สำเร็จ!", Content = "ส่งคำขอเสก Lucky Block เรียบร้อย", Duration = 2 })
+       else
+           Rayfield:Notify({ Title = "ผิดพลาด!", Content = "ไม่พบ SpawnLuckyBlock ใน ReplicatedStorage", Duration = 3 })
+       end
+   end,
+})
+
+----------------------------------------------------------------
+-- TAB 2: PLAYER (Fly, Noclip, ESP)
+----------------------------------------------------------------
+local PlayerTab = Window:CreateTab("Player Controls", 4483362458)
+
+-- 1. Fly System
+PlayerTab:CreateToggle({
+   Name = "Fly (บิน)",
+   CurrentValue = false,
+   Flag = "FlyToggle",
+   Callback = function(Value)
+       FlyEnabled = Value
+       local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+       local HRP = Character:FindFirstChild("HumanoidRootPart")
+       
+       if FlyEnabled and HRP then
+           local BodyVelocity = Instance.new("BodyVelocity")
+           BodyVelocity.Name = "FlyVelocity"
+           BodyVelocity.MaxForce = Vector3.new(1,1,1) * 10^6
+           BodyVelocity.Velocity = Vector3.new(0, 0, 0)
+           BodyVelocity.Parent = HRP
+
+           local BodyGyro = Instance.new("BodyGyro")
+           BodyGyro.Name = "FlyGyro"
+           BodyGyro.MaxTorque = Vector3.new(1,1,1) * 10^6
+           BodyGyro.CFrame = HRP.CFrame
+           BodyGyro.Parent = HRP
+
+           task.spawn(function()
+               while FlyEnabled and Character and HRP and HRP:FindFirstChild("FlyVelocity") do
+                   local Camera = workspace.CurrentCamera
+                   local moveDir = Vector3.zero
+                   
+                   -- คำนวณทิศทางการเคลื่อนที่
+                   local UserInputService = game:GetService("UserInputService")
+                   if UserInputService:IsKeyDown(Enum.KeyCode.W) then moveDir = moveDir + Camera.CFrame.LookVector end
+                   if UserInputService:IsKeyDown(Enum.KeyCode.S) then moveDir = moveDir - Camera.CFrame.LookVector end
+                   if UserInputService:IsKeyDown(Enum.KeyCode.A) then moveDir = moveDir - Camera.CFrame.RightVector end
+                   if UserInputService:IsKeyDown(Enum.KeyCode.D) then moveDir = moveDir + Camera.CFrame.RightVector end
+                   if UserInputService:IsKeyDown(Enum.KeyCode.Space) then moveDir = moveDir + Vector3.new(0, 1, 0) end
+                   if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then moveDir = moveDir - Vector3.new(0, 1, 0) end
+
+                   BodyVelocity.Velocity = moveDir * FlySpeed
+                   BodyGyro.CFrame = Camera.CFrame
+                   RunService.RenderStepped:Wait()
+               end
+               if HRP:FindFirstChild("FlyVelocity") then HRP.FlyVelocity:Destroy() end
+               if HRP:FindFirstChild("FlyGyro") then HRP.FlyGyro:Destroy() end
+           end)
+       else
+           if HRP and HRP:FindFirstChild("FlyVelocity") then HRP.FlyVelocity:Destroy() end
+           if HRP and HRP:FindFirstChild("FlyGyro") then HRP.FlyGyro:Destroy() end
+       end
+   end,
+})
+
+PlayerTab:CreateSlider({
+   Name = "Fly Speed (ความเร็วบิน)",
+   Range = {10, 200},
+   Increment = 5,
+   CurrentValue = 50,
+   Callback = function(Value)
+       FlySpeed = Value
+   end,
+})
+
+-- 2. Noclip System
+PlayerTab:CreateToggle({
+   Name = "Noclip (เดินทะลุกำแพง)",
+   CurrentValue = false,
+   Callback = function(Value)
+       NoclipEnabled = Value
+   end,
+})
+
+RunService.Stepped:Connect(function()
+   if NoclipEnabled and LocalPlayer.Character then
+       for _, part in pairs(LocalPlayer.Character:GetDescendants()) do
+           if part:IsA("BasePart") then
+               part.CanCollide = false
+           end
+       end
+   end
+end)
+
+-- 3. ESP Player System
+local Highlights = {}
+
+PlayerTab:CreateToggle({
+   Name = "ESP Player (มองทะลุผู้เล่น)",
+   CurrentValue = false,
+   Callback = function(Value)
+       ESPEnabled = Value
+       
+       if not ESPEnabled then
+           for _, highlight in pairs(Highlights) do
+               highlight:Destroy()
+           end
+           Highlights = {}
+       end
+   end,
+})
+
+RunService.RenderStepped:Connect(function()
+   if ESPEnabled then
+       for _, player in pairs(Players:GetPlayers()) do
+           if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+               if not Highlights[player] or not Highlights[player].Parent then
+                   local Highlight = Instance.new("Highlight")
+                   Highlight.Name = "ESPHighlight"
+                   Highlight.FillColor = Color3.fromRGB(255, 0, 0)
+                   Highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+                   Highlight.FillTransparency = 0.5
+                   Highlight.OutlineTransparency = 0
+                   Highlight.Adornee = player.Character
+                   Highlight.Parent = player.Character
+                   Highlights[player] = Highlight
+               end
+           end
+       end
+   end
+end)
+
+----------------------------------------------------------------
+-- TAB 3: TELEPORT & BRING
+----------------------------------------------------------------
+local TeleportTab = Window:CreateTab("Teleport / Bring", 4483362458)
+
+-- ฟังก์ชันอัปเดต รายชื่อผู้เล่นในเซิร์ฟเวอร์
+local function GetPlayerList()
+   local list = {}
+   for _, p in pairs(Players:GetPlayers()) do
+       if p ~= LocalPlayer then
+           table.insert(list, p.Name)
+       end
+   end
+   return list
+end
+
+local PlayerDropdown = TeleportTab:CreateDropdown({
+   Name = "เลือกผู้เล่น Target",
+   Options = GetPlayerList(),
+   CurrentOption = "",
+   MultipleOptions = false,
+   Callback = function(Option)
+       SelectedPlayer = Option[1] or Option
+   end,
+})
+
+-- ปุ่มรีเฟรชรายชื่อผู้เล่น
+TeleportTab:CreateButton({
+   Name = "🔄 Refresh รายชื่อผู้เล่น",
+   Callback = function()
+       PlayerDropdown:Set(GetPlayerList())
+   end,
+})
+
+-- 4. Teleport to Player
+TeleportTab:CreateButton({
+   Name = "Teleport To Player (วาร์ปไปหา)",
+   Callback = function()
+       if SelectedPlayer and Players:FindFirstChild(SelectedPlayer) then
+           local targetChar = Players[SelectedPlayer].Character
+           local myChar = LocalPlayer.Character
+           
+           if targetChar and targetChar:FindFirstChild("HumanoidRootPart") and myChar and myChar:FindFirstChild("HumanoidRootPart") then
+               myChar.HumanoidRootPart.CFrame = targetChar.HumanoidRootPart.CFrame * CFrame.new(0, 0, 3)
+               Rayfield:Notify({ Title = "Teleport", Content = "วาร์ปไปหา " .. SelectedPlayer .. " แล้ว!", Duration = 2 })
+           end
+       else
+           Rayfield:Notify({ Title = "เตือน", Content = "กรุณาเลือกผู้เล่นก่อน!", Duration = 2 })
+       end
+   end,
+})
+
+-- 5. Bring Player ( Client-Side Simulation / Tool Loop )
+TeleportTab:CreateButton({
+   Name = "Bring Player (ดึงมาหา - ต้องการสิทธิ์/ฟิสิกส์หลุด)",
+   Callback = function()
+       if SelectedPlayer and Players:FindFirstChild(SelectedPlayer) then
+           local targetChar = Players[SelectedPlayer].Character
+           local myChar = LocalPlayer.Character
+           
+           if targetChar and targetChar:FindFirstChild("HumanoidRootPart") and myChar and myChar:FindFirstChild("HumanoidRootPart") then
+               -- การ Bring ฝั่ง Client โดยตรงจะติดระบบรักษาความปลอดภัยของ Roblox (FilteringEnabled) 
+               -- โค้ดนี้จะใช้เทคนิคเคลื่อนย้ายตำแหน่งชั่วคราว/ดึง CFrame
+               targetChar.HumanoidRootPart.CFrame = myChar.HumanoidRootPart.CFrame * CFrame.new(0, 0, -3)
+               Rayfield:Notify({ 
+                   Title = "Bring Player", 
+                   Content = "ส่งคำขอดึงตัว " .. SelectedPlayer .. "\n(หมายเหตุ: แมพส่วนใหญ่มีระบบป้องกัน FE ดึงได้เฉพาะแมพที่ปิด FE หรือใช้ Tool)", 
+                   Duration = 4 
+               })
+           end
+       else
+           Rayfield:Notify({ Title = "เตือน", Content = "กรุณาเลือกผู้เล่นก่อน!", Duration = 2 })
+       end
+   end,
+})
